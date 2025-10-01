@@ -1,9 +1,8 @@
 import feedparser
-import datetime
+from datetime import datetime, timedelta, timezone
 import pytz
-import xml.etree.ElementTree as ET
 
-# Your feeds dict
+# Your feeds dictionary
 feeds = {
     "Bangla Editorials": [
         "https://evilgodfahim.github.io/bdpratidin-rss/feed.xml",
@@ -20,6 +19,7 @@ feeds = {
         "https://politepol.com/fd/dwg0cNjfFTLe.xml",
         "https://politepol.com/fd/DrjUg80wxrku.xml",
     ],
+
     "English Editorials": [
         "https://politepol.com/fd/QAIWwDi3wOuZ.xml",
         "https://politepol.com/fd/LONi4mJ2tfbd.xml",
@@ -35,6 +35,7 @@ feeds = {
         "https://politepol.com/fd/CnOMC37mGwul.xml",
         "https://politepol.com/fd/qVPraFDG1MNh.xml",
     ],
+
     "Magazines": [
         "https://www.scientificamerican.com/platform/syndication/rss/",
         "https://feeds.newscientist.com/science-news",
@@ -47,6 +48,7 @@ feeds = {
         "https://theconversation.com/us/topics/artificial-intelligence-ai-90/articles.atom",
         "https://politepol.com/fd/j6weY8TmEdGW.xml",
     ],
+
     "International": [
         "http://feeds.feedburner.com/dawn-news-world",
         "https://feeds.guardian.co.uk/theguardian/world/rss",
@@ -84,6 +86,7 @@ feeds = {
         "https://politepol.com/fd/MQdEEfACJVgu.xml",
         "https://www.scmp.com/rss/318199/feed",
     ],
+
     "Geopolitics": [
         "https://www.noemamag.com/article-topic/geopolitics-globalization/feed/",
         "https://zeihan.com/feed/",
@@ -107,31 +110,53 @@ feeds = {
     ],
 }
 
-# Get current UTC time
-now = datetime.datetime.now(pytz.utc)
-yesterday = now - datetime.timedelta(days=1)
 
-# Create root RSS
-rss = ET.Element("rss", version="2.0")
+def fetch_titles():
+    bd_tz = pytz.timezone("Asia/Dhaka")
+    now = datetime.now(bd_tz)
+    cutoff = now - timedelta(days=1)
 
-for section, urls in feeds.items():
-    channel = ET.SubElement(rss, "channel")
-    ET.SubElement(channel, "title").text = section
-    ET.SubElement(channel, "link").text = "https://evilgodfahim.github.io/"
-    ET.SubElement(channel, "description").text = f"{section} - Last 24 hours"
+    section_titles = {}
+    for section, urls in feeds.items():
+        titles = []
+        for url in urls:
+            try:
+                feed = feedparser.parse(url)
+                for entry in feed.entries:
+                    if hasattr(entry, "published_parsed") and entry.published_parsed:
+                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).astimezone(bd_tz)
+                        if pub_date > cutoff:
+                            titles.append(entry.title)
+            except Exception as e:
+                print(f"Error fetching {url}: {e}")
+        if titles:
+            section_titles[section] = titles
+    return section_titles, now
 
-    for url in urls:
-        try:
-            parsed = feedparser.parse(url)
-            for entry in parsed.entries:
-                if hasattr(entry, "published_parsed"):
-                    published = datetime.datetime(*entry.published_parsed[:6], tzinfo=pytz.utc)
-                    if published < yesterday:
-                        continue
-                item = ET.SubElement(channel, "item")
-                ET.SubElement(item, "title").text = entry.title
-        except Exception as e:
-            print(f"Error parsing {url}: {e}")
 
-tree = ET.ElementTree(rss)
-tree.write("feed.xml", encoding="utf-8", xml_declaration=True)
+def build_rss(section_titles, now):
+    rss = '<?xml version="1.0" encoding="UTF-8" ?>\n'
+    rss += '<rss version="2.0">\n<channel>\n'
+    rss += f"<title>Daily News Titles</title>\n"
+    rss += f"<link>https://yourusername.github.io/</link>\n"
+    rss += f"<description>News titles from past 24 hours (grouped by section)</description>\n"
+    rss += f"<lastBuildDate>{now.strftime('%a, %d %b %Y %H:%M:%S %z')}</lastBuildDate>\n"
+
+    for section, titles in section_titles.items():
+        description = "<ul>" + "".join([f"<li>{t}</li>" for t in titles]) + "</ul>"
+        rss += "<item>\n"
+        rss += f"<title>{section}</title>\n"
+        rss += f"<description><![CDATA[{description}]]></description>\n"
+        rss += f"<pubDate>{now.strftime('%a, %d %b %Y %H:%M:%S %z')}</pubDate>\n"
+        rss += "</item>\n"
+
+    rss += "</channel>\n</rss>"
+    return rss
+
+
+if __name__ == "__main__":
+    section_titles, now = fetch_titles()
+    rss = build_rss(section_titles, now)
+    with open("feed.xml", "w", encoding="utf-8") as f:
+        f.write(rss)
+    print("feed.xml generated successfully")
