@@ -1,8 +1,9 @@
 import feedparser
 from datetime import datetime, timedelta, timezone
 import pytz
+import hashlib
 
-# Your feeds dictionary
+# --- Feeds dictionary ---
 feeds = {
     "Bangla Editorials": [
         "https://evilgodfahim.github.io/bdpratidin-rss/feed.xml",
@@ -142,13 +143,19 @@ def build_rss(section_titles, now):
     rss += f"<description>News titles from past 24 hours (grouped by section)</description>\n"
     rss += f"<lastBuildDate>{now.strftime('%a, %d %b %Y %H:%M:%S %z')}</lastBuildDate>\n"
 
+    counter = 1
     for section, titles in section_titles.items():
         description = "<ul>" + "".join([f"<li>{t}</li>" for t in titles]) + "</ul>"
+        unique_id = hashlib.md5((section + now.isoformat()).encode()).hexdigest()
+
         rss += "<item>\n"
-        rss += f"<title>{section}</title>\n"
+        rss += f"<title>{section} #{counter}</title>\n"
         rss += f"<description><![CDATA[{description}]]></description>\n"
         rss += f"<pubDate>{now.strftime('%a, %d %b %Y %H:%M:%S %z')}</pubDate>\n"
+        rss += f"<guid isPermaLink=\"false\">{unique_id}</guid>\n"
         rss += "</item>\n"
+
+        counter += 1
 
     rss += "</channel>\n</rss>"
     return rss
